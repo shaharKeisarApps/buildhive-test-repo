@@ -1,0 +1,88 @@
+name: 'BuildHive CI'
+description: 'Offload heavy CI builds to your team''s idle developer machines, reducing cloud CI costs by 60-80%'
+author: 'BuildHive Team'
+branding:
+  icon: 'zap'
+  color: 'blue'
+
+inputs:
+  server-url:
+    description: 'BuildHive server URL (e.g., https://buildhive.yourcompany.com)'
+    required: true
+  api-key:
+    description: 'BuildHive API key for authentication (use GitHub secrets)'
+    required: true
+  build-command:
+    description: 'Command to execute for the build. Auto-detected from project type if not specified (supports 15 build systems including Gradle, npm, Cargo, Go, Rust, Python, Flutter, .NET, and more).'
+    required: false
+    default: ''
+  recipe:
+    description: 'Explicit recipe override (e.g., "android-gradle", "kmp", "flutter"). When set, skips auto-detection. Available recipes: android-gradle, ios-xcode, nodejs-npm, nodejs-yarn, python-pip, python-poetry, go-module, rust-cargo, dotnet, flutter, react-native, docker-build, terraform, kmp, ruby-rails.'
+    required: false
+    default: ''
+  repository:
+    description: 'Repository name (defaults to current repository)'
+    required: false
+    default: ${{ github.repository }}
+  branch:
+    description: 'Branch name (defaults to current branch)'
+    required: false
+    default: ${{ github.ref_name }}
+  commit-sha:
+    description: 'Commit SHA (defaults to current commit)'
+    required: false
+    default: ${{ github.sha }}
+  timeout-minutes:
+    description: 'Maximum job execution time in minutes (default: 60)'
+    required: false
+    default: '60'
+  fallback-timeout-minutes:
+    description: 'How long to wait for an agent before falling back to cloud CI (default: 5)'
+    required: false
+    default: '5'
+  enable-fallback:
+    description: 'Enable fallback to GitHub Actions cloud runners if no agents available (default: true)'
+    required: false
+    default: 'true'
+  artifact-paths:
+    description: 'Paths to artifacts to collect (comma-separated, supports globs)'
+    required: false
+    default: ''
+  environment-variables:
+    description: 'Environment variables to pass to the build (JSON object or key=value pairs, one per line)'
+    required: false
+    default: ''
+  tags:
+    description: 'Tags for agent selection (comma-separated, e.g., "macos,xcode15")'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory for the build command'
+    required: false
+    default: '.'
+
+outputs:
+  job-id:
+    description: 'BuildHive job ID'
+  status:
+    description: 'Job status (COMPLETED, FAILED, or FALLBACK)'
+  exit-code:
+    description: 'Build exit code'
+  duration:
+    description: 'Build duration in seconds'
+  agent-id:
+    description: 'Agent that executed the job'
+  artifacts:
+    description: 'URLs of uploaded artifacts (JSON array)'
+  cost-savings:
+    description: 'Estimated cost savings vs GitHub Actions (USD)'
+  build-command-used:
+    description: 'The build command that was used (useful when auto-detected)'
+  recipe-used:
+    description: 'Which recipe was detected or explicitly set (e.g., "android-gradle", "kmp")'
+  logs:
+    description: 'Build logs (truncated if too long)'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
