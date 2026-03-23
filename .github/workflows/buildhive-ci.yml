@@ -28,7 +28,7 @@ jobs:
           working-directory: sample-node-app
           timeout-minutes: 10
           fallback-timeout-minutes: 1
-          artifacts: 'dist/**'
+          artifact-paths: 'dist/**'
         continue-on-error: true
 
       - name: Fallback - Run locally if BuildHive unavailable
