@@ -1,0 +1,97 @@
+name: BuildHive CI Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  buildhive-node:
+    name: Node.js Build (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-node-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: shaharKeisarApps/BuildHive-KMP/buildhive-action@develop
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY }}
+          build-command: 'npm test && npm run build'
+          working-directory: sample-node-app
+          timeout-minutes: 10
+          fallback-timeout-minutes: 2
+          artifacts: 'dist/**'
+        continue-on-error: true
+
+      - name: Fallback - Run locally if BuildHive unavailable
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "BuildHive unavailable, running locally..."
+          npm install
+          npm test
+          npm run build
+
+      - name: Report
+        if: always()
+        run: |
+          echo "BuildHive status: ${{ steps.buildhive.outputs.status }}"
+          echo "BuildHive job ID: ${{ steps.buildhive.outputs.job-id }}"
+          echo "Cost savings: ${{ steps.buildhive.outputs.cost-savings }}"
+          echo "Recipe used: ${{ steps.buildhive.outputs.recipe-used }}"
+
+  buildhive-python:
+    name: Python Build (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-python-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: shaharKeisarApps/BuildHive-KMP/buildhive-action@develop
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY }}
+          build-command: 'pip install -r requirements.txt && python app.py'
+          working-directory: sample-python-app
+          timeout-minutes: 10
+          fallback-timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Fallback - Run locally if BuildHive unavailable
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "BuildHive unavailable, running locally..."
+          pip install -r requirements.txt
+          python app.py
+
+  local-only:
+    name: Standard CI (no BuildHive - baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build Node app
+        working-directory: sample-node-app
+        run: |
+          npm install
+          npm test
+          npm run build
+      - name: Build Python app
+        working-directory: sample-python-app
+        run: |
+          pip install -r requirements.txt
+          python app.py

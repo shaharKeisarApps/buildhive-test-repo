@@ -1,0 +1,12 @@
+{
+  "name": "buildhive-test-node",
+  "version": "1.0.0",
+  "description": "Sample Node.js app for testing BuildHive CI",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'Building...' && node -e \"console.log('Build successful')\"",
+    "test": "echo 'Testing...' && node -e \"console.log('All tests passed')\"",
+    "start": "node index.js"
+  },
+  "dependencies": {}
+}
