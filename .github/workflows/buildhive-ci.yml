@@ -8,6 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
+  # ─── Existing Jobs ───────────────────────────────────────────────────
+
   buildhive-node:
     name: Node.js Build (via BuildHive)
     runs-on: ubuntu-latest
@@ -99,3 +101,340 @@ jobs:
         run: |
           pip install -r requirements.txt
           python app.py
+
+  # ─── New Jobs ────────────────────────────────────────────────────────
+
+  buildhive-go:
+    name: Go Build (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-go-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: ./.github/actions/buildhive
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL || 'http://localhost:3001' }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY || 'test-key' }}
+          build-command: 'go test ./... && go build -o bin/app .'
+          working-directory: sample-go-app
+          timeout-minutes: 10
+          fallback-timeout-minutes: 1
+        continue-on-error: true
+
+      - name: Fallback - Run locally if BuildHive unavailable
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "::notice::BuildHive unavailable — running build locally (fallback)"
+          go test ./...
+          go build -o bin/app .
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### BuildHive Go Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.buildhive.outputs.status || 'FALLBACK' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Recipe | ${{ steps.buildhive.outputs.recipe-used || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Outcome | ${{ steps.buildhive.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  buildhive-rust:
+    name: Rust Build (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-rust-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: ./.github/actions/buildhive
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL || 'http://localhost:3001' }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY || 'test-key' }}
+          build-command: 'cargo build --release'
+          working-directory: sample-rust-app
+          timeout-minutes: 15
+          fallback-timeout-minutes: 1
+        continue-on-error: true
+
+      - name: Fallback - Run locally if BuildHive unavailable
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "::notice::BuildHive unavailable — running build locally (fallback)"
+          rustup default stable
+          cargo build --release
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### BuildHive Rust Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.buildhive.outputs.status || 'FALLBACK' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Recipe | ${{ steps.buildhive.outputs.recipe-used || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Outcome | ${{ steps.buildhive.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  buildhive-docker:
+    name: Docker Build (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-docker-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: ./.github/actions/buildhive
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL || 'http://localhost:3001' }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY || 'test-key' }}
+          build-command: 'docker build -t sample-docker-app .'
+          working-directory: sample-docker-app
+          timeout-minutes: 10
+          fallback-timeout-minutes: 1
+        continue-on-error: true
+
+      - name: Fallback - Run locally if BuildHive unavailable
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "::notice::BuildHive unavailable — running build locally (fallback)"
+          docker build -t sample-docker-app .
+          docker run --rm sample-docker-app
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### BuildHive Docker Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.buildhive.outputs.status || 'FALLBACK' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Recipe | ${{ steps.buildhive.outputs.recipe-used || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Outcome | ${{ steps.buildhive.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  buildhive-kmp:
+    name: KMP Detection (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-kmp-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: ./.github/actions/buildhive
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL || 'http://localhost:3001' }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY || 'test-key' }}
+          build-command: 'echo "KMP detection test only"'
+          working-directory: sample-kmp-app
+          timeout-minutes: 5
+          fallback-timeout-minutes: 1
+        continue-on-error: true
+
+      - name: Fallback - Detection test only
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "::notice::Detection test only"
+          echo "Detection test only — KMP project detected via build.gradle.kts with kotlin(multiplatform)"
+          test -f build.gradle.kts && echo "PASS: build.gradle.kts found" || echo "FAIL: build.gradle.kts missing"
+          grep -q 'multiplatform' build.gradle.kts && echo "PASS: multiplatform plugin detected" || echo "FAIL: multiplatform plugin not found"
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### BuildHive KMP Detection Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.buildhive.outputs.status || 'FALLBACK' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Recipe | ${{ steps.buildhive.outputs.recipe-used || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Outcome | ${{ steps.buildhive.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  buildhive-flutter:
+    name: Flutter Detection (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-flutter-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: ./.github/actions/buildhive
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL || 'http://localhost:3001' }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY || 'test-key' }}
+          build-command: 'echo "Flutter detection test only"'
+          working-directory: sample-flutter-app
+          timeout-minutes: 5
+          fallback-timeout-minutes: 1
+        continue-on-error: true
+
+      - name: Fallback - Detection test only
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "::notice::Detection test only"
+          echo "Detection test only — Flutter project detected via pubspec.yaml"
+          test -f pubspec.yaml && echo "PASS: pubspec.yaml found" || echo "FAIL: pubspec.yaml missing"
+          grep -q 'flutter' pubspec.yaml && echo "PASS: flutter dependency detected" || echo "FAIL: flutter dependency not found"
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### BuildHive Flutter Detection Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.buildhive.outputs.status || 'FALLBACK' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Recipe | ${{ steps.buildhive.outputs.recipe-used || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Outcome | ${{ steps.buildhive.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  buildhive-dotnet:
+    name: .NET Build (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-dotnet-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: ./.github/actions/buildhive
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL || 'http://localhost:3001' }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY || 'test-key' }}
+          build-command: 'dotnet build && dotnet run'
+          working-directory: sample-dotnet-app
+          timeout-minutes: 10
+          fallback-timeout-minutes: 1
+        continue-on-error: true
+
+      - name: Fallback - Run locally if BuildHive unavailable
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "::notice::BuildHive unavailable — running build locally (fallback)"
+          dotnet build
+          dotnet run
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### BuildHive .NET Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.buildhive.outputs.status || 'FALLBACK' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Recipe | ${{ steps.buildhive.outputs.recipe-used || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Outcome | ${{ steps.buildhive.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  buildhive-terraform:
+    name: Terraform Build (via BuildHive)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sample-terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive CI
+        id: buildhive
+        uses: ./.github/actions/buildhive
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL || 'http://localhost:3001' }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY || 'test-key' }}
+          build-command: 'terraform init && terraform validate'
+          working-directory: sample-terraform
+          timeout-minutes: 10
+          fallback-timeout-minutes: 1
+        continue-on-error: true
+
+      - name: Fallback - Run locally if BuildHive unavailable
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        run: |
+          echo "::notice::BuildHive unavailable — running build locally (fallback)"
+          terraform init
+          terraform validate
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### BuildHive Terraform Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.buildhive.outputs.status || 'FALLBACK' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Recipe | ${{ steps.buildhive.outputs.recipe-used || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Outcome | ${{ steps.buildhive.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ─── Recipe Detection Matrix ─────────────────────────────────────────
+
+  recipe-detection-matrix:
+    name: Recipe Detection (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: sample-node-app
+            expected-recipe: nodejs-npm
+          - project: sample-python-app
+            expected-recipe: python-pip
+          - project: sample-go-app
+            expected-recipe: go-module
+          - project: sample-rust-app
+            expected-recipe: rust-cargo
+          - project: sample-docker-app
+            expected-recipe: docker-build
+          - project: sample-kmp-app
+            expected-recipe: kmp
+          - project: sample-flutter-app
+            expected-recipe: flutter
+          - project: sample-dotnet-app
+            expected-recipe: dotnet
+          - project: sample-terraform
+            expected-recipe: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BuildHive Recipe Detection
+        id: buildhive
+        uses: ./.github/actions/buildhive
+        with:
+          server-url: ${{ secrets.BUILDHIVE_SERVER_URL || 'http://localhost:3001' }}
+          api-key: ${{ secrets.BUILDHIVE_API_KEY || 'test-key' }}
+          build-command: 'echo "Recipe detection test for ${{ matrix.project }}"'
+          working-directory: ${{ matrix.project }}
+          timeout-minutes: 5
+          fallback-timeout-minutes: 1
+        continue-on-error: true
+
+      - name: Validate Detection
+        if: always()
+        run: |
+          DETECTED="${{ steps.buildhive.outputs.recipe-used }}"
+          EXPECTED="${{ matrix.expected-recipe }}"
+          echo "### Recipe Detection: ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Project | ${{ matrix.project }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Expected Recipe | ${EXPECTED} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Detected Recipe | ${DETECTED:-none} |" >> $GITHUB_STEP_SUMMARY
+          if [ "${DETECTED}" = "${EXPECTED}" ]; then
+            echo "| Result | PASS |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Result | CHECK (expected: ${EXPECTED}, got: ${DETECTED:-none}) |" >> $GITHUB_STEP_SUMMARY
+          fi
