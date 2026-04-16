@@ -35196,13 +35196,14 @@ async function run() {
             fallbackTimeout: parseInt(inputs.fallbackTimeout)
         };
         const client = new buildhive_1.BuildHiveClient(config);
-        // Test connection
+        // Test connection (non-blocking — submission has its own retry logic)
         core.info('Testing connection to BuildHive...');
         const isConnected = await client.testConnection();
-        if (!isConnected) {
-            core.warning('Failed to connect to BuildHive, falling back to standard GitHub runners');
-            setFallbackOutputs();
-            return;
+        if (isConnected) {
+            core.info('BuildHive server is reachable');
+        }
+        else {
+            core.warning('BuildHive connection test failed — will retry during job submission');
         }
         // Prepare job request
         const jobRequest = createJobRequest(inputs);
