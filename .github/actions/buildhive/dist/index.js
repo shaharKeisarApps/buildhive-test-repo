@@ -35228,19 +35228,20 @@ async function run() {
 }
 function getActionInputs() {
     return {
-        buildhiveUrl: core.getInput('buildhive-url', { required: true }),
+        // Support both old (buildhive-url) and new (server-url) input names
+        buildhiveUrl: core.getInput('server-url') || core.getInput('buildhive-url', { required: true }),
         apiKey: core.getInput('api-key', { required: true }),
-        jobType: core.getInput('job-type', { required: true }),
-        dockerImage: core.getInput('docker-image', { required: true }),
+        jobType: core.getInput('job-type') || 'BUILD',
+        dockerImage: core.getInput('docker-image') || 'node:20',
         buildCommand: core.getInput('build-command', { required: true }),
         requiredOS: core.getInput('required-os') || undefined,
         requiredArch: core.getInput('required-arch') || undefined,
         requiredMemory: core.getInput('required-memory') || undefined,
-        requiredTags: core.getInput('required-tags') || undefined,
-        timeout: core.getInput('timeout') || '1800',
-        fallbackTimeout: core.getInput('fallback-timeout') || '300',
-        artifacts: core.getInput('artifacts') || undefined,
-        environment: core.getInput('environment') || '{}'
+        requiredTags: core.getInput('tags') || core.getInput('required-tags') || undefined,
+        timeout: core.getInput('timeout-minutes') || core.getInput('timeout') || '60',
+        fallbackTimeout: core.getInput('fallback-timeout-minutes') || core.getInput('fallback-timeout') || '300',
+        artifacts: core.getInput('artifact-paths') || core.getInput('artifacts') || undefined,
+        environment: core.getInput('environment-variables') || core.getInput('environment') || '{}'
     };
 }
 function validateInputs(inputs) {
