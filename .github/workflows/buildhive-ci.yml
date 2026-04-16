@@ -29,7 +29,7 @@ jobs:
           build-command: 'npm test && npm run build'
           working-directory: sample-node-app
           timeout-minutes: 10
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
           artifact-paths: 'dist/**'
         continue-on-error: true
 
@@ -72,7 +72,7 @@ jobs:
           build-command: 'pip install -r requirements.txt && python app.py'
           working-directory: sample-python-app
           timeout-minutes: 10
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Fallback - Run locally if BuildHive unavailable
@@ -123,7 +123,7 @@ jobs:
           build-command: 'go test ./... && go build -o bin/app .'
           working-directory: sample-go-app
           timeout-minutes: 10
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Fallback - Run locally if BuildHive unavailable
@@ -162,7 +162,7 @@ jobs:
           build-command: 'cargo build --release'
           working-directory: sample-rust-app
           timeout-minutes: 15
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Fallback - Run locally if BuildHive unavailable
@@ -201,7 +201,7 @@ jobs:
           build-command: 'docker build -t sample-docker-app .'
           working-directory: sample-docker-app
           timeout-minutes: 10
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Fallback - Run locally if BuildHive unavailable
@@ -240,7 +240,7 @@ jobs:
           build-command: 'echo "KMP detection test only"'
           working-directory: sample-kmp-app
           timeout-minutes: 5
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Fallback - Detection test only
@@ -280,7 +280,7 @@ jobs:
           build-command: 'echo "Flutter detection test only"'
           working-directory: sample-flutter-app
           timeout-minutes: 5
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Fallback - Detection test only
@@ -320,7 +320,7 @@ jobs:
           build-command: 'dotnet build && dotnet run'
           working-directory: sample-dotnet-app
           timeout-minutes: 10
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Fallback - Run locally if BuildHive unavailable
@@ -359,7 +359,7 @@ jobs:
           build-command: 'terraform init && terraform validate'
           working-directory: sample-terraform
           timeout-minutes: 10
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Fallback - Run locally if BuildHive unavailable
@@ -419,7 +419,7 @@ jobs:
           build-command: 'echo "Recipe detection test for ${{ matrix.project }}"'
           working-directory: ${{ matrix.project }}
           timeout-minutes: 5
-          fallback-timeout-minutes: 1
+          fallback-timeout-minutes: 5
         continue-on-error: true
 
       - name: Validate Detection
