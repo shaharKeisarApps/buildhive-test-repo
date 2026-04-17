@@ -35183,6 +35183,7 @@ exports.run = run;
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const buildhive_1 = __nccwpck_require__(9805);
+const recipeDetector_1 = __nccwpck_require__(7423);
 async function run() {
     try {
         // Get action inputs
@@ -35228,12 +35229,45 @@ async function run() {
     }
 }
 function getActionInputs() {
+    // Explicit inputs (may be empty)
+    const explicitDockerImage = core.getInput('docker-image');
+    const explicitRecipe = core.getInput('recipe');
+    const workingDirectory = core.getInput('working-directory') || '.';
+    // Auto-detect recipe if no explicit docker-image is set.
+    // This fixes the "Go runs in node:20" bug by mapping project type → correct image.
+    let dockerImage = explicitDockerImage;
+    if (!dockerImage) {
+        // If recipe is explicitly set, look up its default image
+        if (explicitRecipe) {
+            const recipeImage = (0, recipeDetector_1.getDockerImageForRecipe)(explicitRecipe);
+            if (recipeImage) {
+                dockerImage = recipeImage;
+                core.info(`Using Docker image from recipe "${explicitRecipe}": ${dockerImage}`);
+            }
+        }
+        // Otherwise, auto-detect from project files
+        if (!dockerImage) {
+            const workDir = workingDirectory === '.' ? process.cwd() : workingDirectory;
+            const detected = (0, recipeDetector_1.detectRecipe)(workDir);
+            if (detected) {
+                dockerImage = detected.dockerImage;
+                core.info(`Auto-detected recipe "${detected.name}" (confidence: ${detected.confidence}%) → Docker image: ${dockerImage}`);
+            }
+            else {
+                dockerImage = 'node:20';
+                core.info(`No recipe detected — defaulting to Docker image: ${dockerImage}`);
+            }
+        }
+    }
+    else {
+        core.info(`Using explicitly set Docker image: ${dockerImage}`);
+    }
     return {
         // Support both old (buildhive-url) and new (server-url) input names
         buildhiveUrl: core.getInput('server-url') || core.getInput('buildhive-url', { required: true }),
         apiKey: core.getInput('api-key', { required: true }),
         jobType: core.getInput('job-type') || 'BUILD',
-        dockerImage: core.getInput('docker-image') || 'node:20',
+        dockerImage,
         buildCommand: core.getInput('build-command', { required: true }),
         requiredOS: core.getInput('required-os') || undefined,
         requiredArch: core.getInput('required-arch') || undefined,
@@ -35380,6 +35414,266 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(error.message);
         process.exit(1);
     });
+}
+
+
+/***/ }),
+
+/***/ 7423:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+/**
+ * Recipe Detection Module for BuildHive GitHub Action
+ *
+ * Mirrors the agent's 15 built-in recipe detection rules so the Action can
+ * auto-detect the right Docker image and build command based on files in
+ * the workspace. Without this, Go jobs run in node:20, Python in node:20, etc.
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.detectRecipe = detectRecipe;
+exports.getDockerImageForRecipe = getDockerImageForRecipe;
+const fs = __importStar(__nccwpck_require__(9896));
+const path = __importStar(__nccwpck_require__(6928));
+/**
+ * Recipe rules — ordered by priority (highest first wins)
+ */
+const RECIPES = [
+    {
+        name: 'android-gradle',
+        files: ['build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts'],
+        contentPatterns: [
+            { file: 'build.gradle', pattern: 'com.android.application' },
+            { file: 'build.gradle.kts', pattern: 'com.android.application' },
+            { file: 'settings.gradle', pattern: 'android' },
+        ],
+        priority: 70,
+        dockerImage: 'cimg/android:2024.04.1',
+        buildCommand: './gradlew assembleRelease --no-daemon --stacktrace',
+        requiredTags: ['docker', 'android-sdk'],
+        environment: {
+            GRADLE_OPTS: '-Dorg.gradle.daemon=false -Xmx4g',
+            ANDROID_HOME: '/opt/android/sdk',
+        },
+    },
+    {
+        name: 'flutter',
+        files: ['pubspec.yaml'],
+        contentPatterns: [{ file: 'pubspec.yaml', pattern: 'flutter' }],
+        priority: 65,
+        dockerImage: 'ghcr.io/cirruslabs/flutter:stable',
+        buildCommand: 'flutter pub get && flutter test',
+        requiredTags: ['docker', 'flutter'],
+    },
+    {
+        name: 'kmp',
+        files: ['build.gradle.kts', 'settings.gradle.kts'],
+        contentPatterns: [
+            { file: 'build.gradle.kts', pattern: 'kotlin("multiplatform")' },
+            { file: 'settings.gradle.kts', pattern: 'kotlin-multiplatform' },
+        ],
+        priority: 60,
+        dockerImage: 'cimg/android:2024.04.1',
+        buildCommand: './gradlew build --no-daemon',
+        requiredTags: ['docker', 'android-sdk'],
+    },
+    {
+        name: 'dotnet',
+        files: ['*.csproj', '*.sln', 'global.json'],
+        priority: 55,
+        dockerImage: 'mcr.microsoft.com/dotnet/sdk:8.0',
+        buildCommand: 'dotnet restore && dotnet build --configuration Release',
+        requiredTags: ['docker', 'dotnet'],
+    },
+    {
+        name: 'rust-cargo',
+        files: ['Cargo.toml', 'Cargo.lock'],
+        priority: 55,
+        dockerImage: 'rust:1.75-slim',
+        buildCommand: 'cargo build --release',
+        requiredTags: ['docker', 'rust'],
+    },
+    {
+        name: 'go-module',
+        files: ['go.mod', 'go.sum'],
+        priority: 55,
+        dockerImage: 'golang:1.22-alpine',
+        buildCommand: 'go build -v ./... && go test ./...',
+        requiredTags: ['docker', 'go'],
+    },
+    {
+        name: 'python-poetry',
+        files: ['pyproject.toml', 'poetry.lock'],
+        contentPatterns: [{ file: 'pyproject.toml', pattern: 'poetry' }],
+        priority: 55,
+        dockerImage: 'python:3.12-slim',
+        buildCommand: 'pip install poetry && poetry install --no-interaction && poetry run pytest',
+        requiredTags: ['docker', 'python'],
+    },
+    {
+        name: 'python-pip',
+        files: ['requirements.txt', 'setup.py', 'pyproject.toml'],
+        priority: 50,
+        dockerImage: 'python:3.12-slim',
+        buildCommand: 'pip install -r requirements.txt && python -m pytest || python -c "import sys; print(sys.version)"',
+        requiredTags: ['docker', 'python'],
+    },
+    {
+        name: 'terraform',
+        files: ['*.tf', 'main.tf', 'terraform.tf'],
+        priority: 50,
+        dockerImage: 'hashicorp/terraform:1.7',
+        buildCommand: 'terraform init && terraform validate && terraform plan',
+        requiredTags: ['docker', 'terraform'],
+    },
+    {
+        name: 'ruby-rails',
+        files: ['Gemfile', 'Gemfile.lock', 'config/application.rb'],
+        contentPatterns: [{ file: 'Gemfile', pattern: 'rails' }],
+        priority: 50,
+        dockerImage: 'ruby:3.3-slim',
+        buildCommand: 'bundle install && bundle exec rspec || bundle exec rake test',
+        requiredTags: ['docker', 'ruby'],
+    },
+    {
+        name: 'nodejs-yarn',
+        files: ['yarn.lock', 'package.json'],
+        priority: 45,
+        dockerImage: 'node:20-alpine',
+        buildCommand: 'yarn install --frozen-lockfile && yarn test && yarn build',
+        requiredTags: ['docker', 'node'],
+    },
+    {
+        name: 'nodejs-npm',
+        files: ['package.json', 'package-lock.json'],
+        priority: 40,
+        dockerImage: 'node:20-alpine',
+        buildCommand: 'npm ci && npm test',
+        requiredTags: ['docker', 'node'],
+    },
+    {
+        name: 'docker-build',
+        files: ['Dockerfile'],
+        priority: 35,
+        dockerImage: 'docker:24-cli',
+        buildCommand: 'docker build -t build:latest .',
+        requiredTags: ['docker', 'dind'],
+    },
+];
+/**
+ * Check if a file exists (supports glob-like wildcards for simple cases)
+ */
+function fileExistsInDir(workDir, filePattern) {
+    if (filePattern.includes('*')) {
+        // Simple wildcard: check if any file matches
+        try {
+            const entries = fs.readdirSync(workDir);
+            const pattern = filePattern.replace(/\*/g, '.*');
+            const regex = new RegExp('^' + pattern + '$');
+            return entries.some((e) => regex.test(e));
+        }
+        catch {
+            return false;
+        }
+    }
+    return fs.existsSync(path.join(workDir, filePattern));
+}
+/**
+ * Check if a file contains a pattern (case-insensitive)
+ */
+function fileContainsPattern(workDir, file, pattern) {
+    try {
+        const fullPath = path.join(workDir, file);
+        if (!fs.existsSync(fullPath))
+            return false;
+        const content = fs.readFileSync(fullPath, 'utf-8').toLowerCase();
+        return content.includes(pattern.toLowerCase());
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Detect the appropriate recipe for a project by scanning files in workDir.
+ * Returns the best-matching recipe or `null` if nothing matched.
+ */
+function detectRecipe(workDir) {
+    let best = null;
+    for (const rule of RECIPES) {
+        // Check if any detection file exists
+        const fileMatches = rule.files.filter((f) => fileExistsInDir(workDir, f)).length;
+        if (fileMatches === 0)
+            continue;
+        // Check content patterns (optional — boost confidence if matched)
+        let contentMatches = 0;
+        if (rule.contentPatterns) {
+            for (const cp of rule.contentPatterns) {
+                if (fileContainsPattern(workDir, cp.file, cp.pattern)) {
+                    contentMatches++;
+                }
+            }
+            // If rule has content patterns but NONE matched, skip (probably wrong recipe)
+            if (contentMatches === 0)
+                continue;
+        }
+        // Confidence: priority + file matches + content matches
+        const confidence = Math.min(100, rule.priority + (fileMatches * 5) + (contentMatches * 10));
+        if (!best || confidence > best.confidence) {
+            best = { rule, confidence };
+        }
+    }
+    if (!best)
+        return null;
+    return {
+        name: best.rule.name,
+        buildCommand: best.rule.buildCommand,
+        dockerImage: best.rule.dockerImage,
+        requiredTags: best.rule.requiredTags,
+        environment: best.rule.environment || {},
+        confidence: best.confidence,
+    };
+}
+/**
+ * Get the Docker image for a given recipe name.
+ * Useful when the user explicitly specifies a recipe but not an image.
+ */
+function getDockerImageForRecipe(recipeName) {
+    const rule = RECIPES.find((r) => r.name === recipeName);
+    return rule?.dockerImage ?? null;
 }
 
 
