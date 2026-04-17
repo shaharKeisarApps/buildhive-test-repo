@@ -362,6 +362,12 @@ jobs:
           fallback-timeout-minutes: 5
         continue-on-error: true
 
+      - name: Setup Terraform (for fallback)
+        if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
       - name: Fallback - Run locally if BuildHive unavailable
         if: steps.buildhive.outcome == 'failure' || steps.buildhive.outputs.status == 'FALLBACK'
         run: |
